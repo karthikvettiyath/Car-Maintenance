@@ -56,6 +56,25 @@ export default function Upcoming() {
         return 'Upcoming';
     };
 
+    const handleMarkComplete = async (serviceId) => {
+        try {
+            const { error } = await supabase
+                .from('services')
+                .update({ status: 'completed' })
+                .eq('id', serviceId)
+                .eq('user_id', user.id);
+
+            if (error) throw error;
+
+            // Remove from local list
+            setUpcomingServices(prev => prev.filter(s => s.id !== serviceId));
+        } catch (err) {
+            console.error('Error marking completed:', err);
+            alert('Failed to update service status');
+        }
+    };
+
+
     return (
         <Layout>
             <h1 className="text-3xl font-bold text-white mb-6">Upcoming Services</h1>
@@ -118,7 +137,12 @@ export default function Upcoming() {
                                     <p className="text-slate-400">{service.vehicles?.year} {service.vehicles?.make} {service.vehicles?.model} • Due: {service.date}</p>
                                 </div>
 
-                                <Button variant="outline" size="sm" className="w-full md:w-auto">
+                                <Button
+                                    onClick={() => handleMarkComplete(service.id)}
+                                    variant={getStatusLabel(service.date) === 'Urgent' ? 'primary' : 'outline'}
+                                    size="sm"
+                                    className="w-full md:w-auto"
+                                >
                                     Mark Complete
                                 </Button>
                             </div>

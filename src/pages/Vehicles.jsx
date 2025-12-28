@@ -97,7 +97,7 @@ export default function Vehicles() {
                                     <div className="flex justify-between items-start">
                                         <h3 className="text-xl font-bold text-white">{vehicle.year} {vehicle.make} {vehicle.model}</h3>
                                         <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                            <button className="p-2 hover:bg-white/10 rounded-lg text-slate-400 hover:text-white">
+                                            <button onClick={() => navigate(`/vehicles/${vehicle.id}/edit`)} className="p-2 hover:bg-white/10 rounded-lg text-slate-400 hover:text-white">
                                                 <Edit className="w-4 h-4" />
                                             </button>
                                             <button onClick={() => handleDelete(vehicle.id)} className="p-2 hover:bg-red-500/10 rounded-lg text-slate-400 hover:text-red-500">

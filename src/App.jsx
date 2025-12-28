@@ -10,6 +10,8 @@ import Settings from './pages/Settings';
 import Login from './pages/Login';
 import SignUp from './pages/SignUp';
 import AddVehicle from './pages/AddVehicle';
+import EditVehicle from './pages/EditVehicle';
+import AddService from './pages/AddService';
 
 function App() {
   return (
@@ -42,6 +44,22 @@ function App() {
             element={
               <ProtectedRoute>
                 <AddVehicle />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/vehicles/:id/edit"
+            element={
+              <ProtectedRoute>
+                <EditVehicle />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/services/new"
+            element={
+              <ProtectedRoute>
+                <AddService />
               </ProtectedRoute>
             }
           />

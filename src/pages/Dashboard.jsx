@@ -14,6 +14,8 @@ export default function Dashboard() {
     const [primaryVehicle, setPrimaryVehicle] = useState(null);
     const [upcomingServices, setUpcomingServices] = useState([]);
 
+    const [recentServices, setRecentServices] = useState([]);
+
     useEffect(() => {
         const fetchDashboardData = async () => {
             try {
@@ -30,10 +32,30 @@ export default function Dashboard() {
                 if (vehicles && vehicles.length > 0) {
                     setPrimaryVehicle(vehicles[0]);
 
-                    // Fetch services for this vehicle (Mocking service structure for now as table might not exist)
-                    // In a real app, this would be: 
-                    // const { data: services } = await supabase.from('services').select('*').eq('vehicle_id', vehicles[0].id)...
-                    setUpcomingServices([]);
+                    // Fetch upcoming services for all vehicles (or just primary, but let's do all for dashboard overview)
+                    const { data: upcoming, error: upcomingError } = await supabase
+                        .from('services')
+                        .select('*')
+                        .eq('user_id', user.id)
+                        .eq('status', 'upcoming')
+                        .order('date', { ascending: true }) // Soonest first
+                        .limit(5);
+
+                    if (upcomingError) throw upcomingError;
+                    setUpcomingServices(upcoming || []);
+
+                    // Fetch recent history
+                    const { data: history, error: historyError } = await supabase
+                        .from('services')
+                        .select('*')
+                        .eq('user_id', user.id)
+                        .eq('status', 'completed')
+                        .order('date', { ascending: false }) // Newest first
+                        .limit(5);
+
+                    if (historyError) throw historyError;
+                    setRecentServices(history || []);
+
                 } else {
                     setPrimaryVehicle(null);
                 }
@@ -83,7 +105,7 @@ export default function Dashboard() {
                     <h1 className="text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-white to-slate-400">Dashboard</h1>
                     <p className="text-slate-400 mt-1">Welcome back, your fleet is looking good.</p>
                 </div>
-                <Button variant="primary" size="md">
+                <Button variant="primary" size="md" onClick={() => navigate('/services/new')}>
                     <Plus className="w-4 h-4" />
                     Add Service
                 </Button>
@@ -122,46 +144,74 @@ export default function Dashboard() {
                     </div>
                 </Card>
 
-                {/* Quick Stats / Alert */}
-                <Card className="flex flex-col justify-center items-center text-center bg-gradient-to-b from-dark-light to-dark border-orange-500/20">
-                    <div className="w-12 h-12 rounded-full bg-orange-500/10 flex items-center justify-center mb-4 text-orange-500">
-                        <AlertTriangle className="w-6 h-6" />
-                    </div>
-                    <h3 className="text-lg font-bold text-white mb-1">Attention Needed</h3>
-                    <p className="text-sm text-slate-400 mb-4">Insurance renewal due in 15 days.</p>
-                    <Button variant="outline" size="sm" className="w-full">Review</Button>
-                </Card>
+                {/* Quick Stats / Alert - Dynamic */}
+                {upcomingServices.length > 0 && new Date(upcomingServices[0].date) < new Date(new Date().setDate(new Date().getDate() + 7)) ? (
+                    <Card className="flex flex-col justify-center items-center text-center bg-gradient-to-b from-dark-light to-dark border-red-500/20">
+                        <div className="w-12 h-12 rounded-full bg-red-500/10 flex items-center justify-center mb-4 text-red-500">
+                            <AlertTriangle className="w-6 h-6" />
+                        </div>
+                        <h3 className="text-lg font-bold text-white mb-1">Attention Needed</h3>
+                        <p className="text-sm text-slate-400 mb-4">{upcomingServices[0].service_type} is due soon.</p>
+                        <Button variant="outline" size="sm" className="w-full" onClick={() => navigate('/upcoming')}>Review</Button>
+                    </Card>
+                ) : (
+                    <Card className="flex flex-col justify-center items-center text-center bg-gradient-to-b from-dark-light to-dark border-emerald-500/20">
+                        <div className="w-12 h-12 rounded-full bg-emerald-500/10 flex items-center justify-center mb-4 text-emerald-500">
+                            <ShieldCheck className="w-6 h-6" />
+                        </div>
+                        <h3 className="text-lg font-bold text-white mb-1">All Good</h3>
+                        <p className="text-sm text-slate-400 mb-4">No urgent maintenance required.</p>
+                        <Button variant="outline" size="sm" className="w-full" onClick={() => navigate('/vehicles')}>View Fleet</Button>
+                    </Card>
+                )}
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 <Card>
                     <CardHeader title="Upcoming Services" subtitle="Based on your maintenance schedule" />
                     <div className="space-y-4">
-                        {upcomingServices.length > 0 ? upcomingServices.map(service => (
+                        {upcomingServices.length > 0 ? upcomingServices.slice(0, 3).map(service => (
                             <div key={service.id} className="flex items-start gap-4 p-4 rounded-xl bg-white/5 hover:bg-white/10 transition-colors border border-white/5">
                                 <div className="w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center text-primary mt-1">
                                     <Calendar className="w-5 h-5" />
                                 </div>
                                 <div className="flex-1">
                                     <h4 className="font-bold text-white">{service.service_type}</h4>
-                                    <p className="text-sm text-slate-400">Due: {service.date} • {service.mileage}km</p>
+                                    <p className="text-sm text-slate-400">Due: {service.date}</p>
                                 </div>
-                                <Button variant="ghost" size="sm">Details</Button>
+                                <Button variant="ghost" size="sm" onClick={() => navigate('/upcoming')}>View</Button>
                             </div>
                         )) : (
                             <div className="text-center py-4 text-slate-500">
                                 <p>No upcoming services scheduled.</p>
                             </div>
                         )}
-                        <Button variant="ghost" className="w-full mt-2">View Full Schedule</Button>
+                        <Button variant="ghost" className="w-full mt-2" onClick={() => navigate('/upcoming')}>View Full Schedule</Button>
                     </div>
                 </Card>
 
                 <Card>
                     <CardHeader title="Recent Activity" subtitle="Log of latest maintenance" />
-                    <div className="flex flex-col items-center justify-center h-48 text-slate-500">
-                        <p>No recent services logged.</p>
-                        <Button variant="ghost" className="mt-2 text-primary">Add Past Service</Button>
+                    <div className="space-y-4">
+                        {recentServices.length > 0 ? recentServices.slice(0, 3).map(service => (
+                            <div key={service.id} className="flex items-start gap-4 p-4 rounded-xl bg-white/5 hover:bg-white/10 transition-colors border border-white/5">
+                                <div className="w-10 h-10 rounded-full bg-emerald-500/20 flex items-center justify-center text-emerald-500 mt-1">
+                                    <ShieldCheck className="w-5 h-5" />
+                                </div>
+                                <div className="flex-1">
+                                    <h4 className="font-bold text-white">{service.service_type}</h4>
+                                    <p className="text-sm text-slate-400">Completed: {service.date} • {service.cost ? `$${service.cost}` : '-'}</p>
+                                </div>
+                            </div>
+                        )) : (
+                            <div className="flex flex-col items-center justify-center h-48 text-slate-500">
+                                <p>No recent services logged.</p>
+                                <Button variant="ghost" className="mt-2 text-primary" onClick={() => navigate('/services/new')}>Add Past Service</Button>
+                            </div>
+                        )}
+                        {recentServices.length > 0 && (
+                            <Button variant="ghost" className="w-full mt-2" onClick={() => navigate('/history')}>View History</Button>
+                        )}
                     </div>
                 </Card>
             </div>

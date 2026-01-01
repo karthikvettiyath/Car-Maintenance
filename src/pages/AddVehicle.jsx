@@ -27,7 +27,7 @@ export default function AddVehicle() {
         setError(null);
 
         try {
-            const { error: insertError } = await supabase
+            const { data, error: insertError } = await supabase
                 .from('vehicles')
                 .insert([
                     {
@@ -41,9 +41,37 @@ export default function AddVehicle() {
                         // Random car image for now
                         image_url: 'https://images.unsplash.com/photo-1549317661-bd32c8ce0db2?auto=format&fit=crop&q=80&w=800'
                     }
-                ]);
+                ])
+                .select();
 
             if (insertError) throw insertError;
+
+            const vehicleId = data[0].id;
+            console.log('Vehicle created:', vehicleId);
+
+            // --- Module 2: Auto-assign Default Services ---
+            const { data: serviceTypes, error: typesError } = await supabase
+                .from('service_types')
+                .select('*');
+
+            if (typesError) console.error('Error fetching service types:', typesError);
+
+            if (serviceTypes && serviceTypes.length > 0) {
+                const schedules = serviceTypes.map(type => ({
+                    user_id: user.id,
+                    vehicle_id: vehicleId,
+                    service_type_id: type.id,
+                    last_performed_date: new Date().toISOString().split('T')[0], // Default to today
+                    last_performed_mileage: parseInt(formData.mileage) // Default to current mileage
+                }));
+
+                const { error: scheduleError } = await supabase
+                    .from('maintenance_schedules')
+                    .insert(schedules);
+
+                if (scheduleError) console.error('Error creating schedules:', scheduleError);
+            }
+            // ---------------------------------------------
 
             navigate('/vehicles');
         } catch (err) {

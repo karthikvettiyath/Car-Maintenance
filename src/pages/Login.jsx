@@ -22,21 +22,26 @@ const Login = () => {
             const { data, error } = await signIn({ email, password });
             if (error) throw error;
 
-            // Check if user has any vehicles
-            const { count } = await supabase
-                .from('vehicles')
-                .select('*', { count: 'exact', head: true })
-                .eq('user_id', data.user.id);
+            try {
+                // Check if user has any vehicles
+                const { count, error: countError } = await supabase
+                    .from('vehicles')
+                    .select('*', { count: 'exact', head: true })
+                    .eq('user_id', data.user.id);
 
-            if (count === 0) {
-                navigate('/vehicles/new');
-            } else {
+                if (countError) throw countError;
+
+                if (count === 0) {
+                    navigate('/vehicles/new');
+                } else {
+                    navigate('/');
+                }
+            } catch (vehicleErr) {
+                console.error('Vehicle check failed after sign-in:', vehicleErr);
                 navigate('/');
             }
         } catch (error) {
             setError(error.message);
-            // If sign in was successful but vehicle check failed, still go to dashboard
-            if (useAuth.user) navigate('/');
         } finally {
             setLoading(false);
         }

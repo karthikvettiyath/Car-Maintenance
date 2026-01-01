@@ -9,13 +9,12 @@ export const useAuth = () => useContext(AuthContext);
 export const AuthProvider = ({ children }) => {
     const [user, setUser] = useState(null);
     const [session, setSession] = useState(null);
-    const [loading, setLoading] = useState(true);
+    const [loading, setLoading] = useState(() => Boolean(supabase));
 
     useEffect(() => {
         console.log('AuthProvider: Initializing...');
         if (!supabase) {
             console.error('AuthProvider: Supabase client is null');
-            setLoading(false);
             return;
         }
 
@@ -43,9 +42,15 @@ export const AuthProvider = ({ children }) => {
     }, []);
 
     const value = {
-        signUp: (data) => supabase.auth.signUp(data),
-        signIn: (data) => supabase.auth.signInWithPassword(data),
-        signOut: () => supabase.auth.signOut(),
+        signUp: (data) => supabase
+            ? supabase.auth.signUp(data)
+            : Promise.reject(new Error('Supabase is not configured.')),
+        signIn: (data) => supabase
+            ? supabase.auth.signInWithPassword(data)
+            : Promise.reject(new Error('Supabase is not configured.')),
+        signOut: () => supabase
+            ? supabase.auth.signOut()
+            : Promise.reject(new Error('Supabase is not configured.')),
         user,
         session,
         loading

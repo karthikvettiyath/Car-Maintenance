@@ -1,11 +1,12 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
+import { supabase } from '../lib/supabase';
 import { Layout } from '../components/layout/Layout';
 import { Card, CardHeader } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
 import { ShieldCheck, AlertTriangle, Calendar, Plus, Loader2, Car } from 'lucide-react';
-import { supabase } from '../lib/supabase';
-import { useAuth } from '../context/AuthContext';
+import { calculateServiceStatus } from '../utils/maintenance';
 
 export default function Dashboard() {
     const { user } = useAuth();
@@ -13,13 +14,12 @@ export default function Dashboard() {
     const [loading, setLoading] = useState(true);
     const [primaryVehicle, setPrimaryVehicle] = useState(null);
     const [upcomingServices, setUpcomingServices] = useState([]);
-
     const [recentServices, setRecentServices] = useState([]);
 
     useEffect(() => {
         const fetchDashboardData = async () => {
             try {
-                // Fetch the most recently added or updated vehicle as primary
+                // 1. Fetch Primary Vehicle
                 const { data: vehicles, error: vehicleError } = await supabase
                     .from('vehicles')
                     .select('*')
@@ -30,27 +30,56 @@ export default function Dashboard() {
                 if (vehicleError) throw vehicleError;
 
                 if (vehicles && vehicles.length > 0) {
-                    setPrimaryVehicle(vehicles[0]);
+                    const vehicle = vehicles[0];
+                    setPrimaryVehicle(vehicle);
 
-                    // Fetch upcoming services for all vehicles (or just primary, but let's do all for dashboard overview)
-                    const { data: upcoming, error: upcomingError } = await supabase
-                        .from('services')
-                        .select('*')
-                        .eq('user_id', user.id)
-                        .eq('status', 'upcoming')
-                        .order('date', { ascending: true }) // Soonest first
-                        .limit(5);
+                    // 2. Fetch Maintenance Schedules (Module 2 Data)
+                    const { data: schedules, error: scheduleError } = await supabase
+                        .from('maintenance_schedules')
+                        .select(`
+                            *,
+                            service_types (
+                                name,
+                                interval_km,
+                                interval_months
+                            )
+                        `)
+                        .eq('vehicle_id', vehicle.id);
 
-                    if (upcomingError) throw upcomingError;
-                    setUpcomingServices(upcoming || []);
+                    if (scheduleError) throw scheduleError;
 
-                    // Fetch recent history
+                    // 3. Module 3: Calculate Status (The "Brain")
+                    const calculatedServices = (schedules || [])
+                        .map(schedule => {
+                            if (!schedule.service_types) return null;
+
+                            return calculateServiceStatus(
+                                schedule.service_types,
+                                schedule,
+                                vehicle.mileage
+                            );
+                        })
+                        .filter(Boolean);
+
+                    // Filter for "Due" or "Upcoming"
+                    const alertServices = calculatedServices
+                        .filter(s => s.status === 'DUE' || s.status === 'UPCOMING')
+                        .sort((a, b) => {
+                            // Custom sort: DUE first, then by date/km? Simplified to just prioritize DUE
+                            if (a.status === 'DUE' && b.status !== 'DUE') return -1;
+                            if (a.status !== 'DUE' && b.status === 'DUE') return 1;
+                            return 0;
+                        });
+
+                    setUpcomingServices(alertServices);
+
+                    // 4. Fetch Recent History (for display)
                     const { data: history, error: historyError } = await supabase
                         .from('services')
                         .select('*')
                         .eq('user_id', user.id)
                         .eq('status', 'completed')
-                        .order('date', { ascending: false }) // Newest first
+                        .order('date', { ascending: false })
                         .limit(5);
 
                     if (historyError) throw historyError;
@@ -144,15 +173,16 @@ export default function Dashboard() {
                     </div>
                 </Card>
 
-                {/* Quick Stats / Alert - Dynamic */}
-                {upcomingServices.length > 0 && new Date(upcomingServices[0].date) < new Date(new Date().setDate(new Date().getDate() + 7)) ? (
+                {/* Quick Stats / Alert - Dynamic Module 3 Output */}
+                {upcomingServices.length > 0 && upcomingServices[0].status === 'DUE' ? (
                     <Card className="flex flex-col justify-center items-center text-center bg-gradient-to-b from-dark-light to-dark border-red-500/20">
                         <div className="w-12 h-12 rounded-full bg-red-500/10 flex items-center justify-center mb-4 text-red-500">
                             <AlertTriangle className="w-6 h-6" />
                         </div>
                         <h3 className="text-lg font-bold text-white mb-1">Attention Needed</h3>
-                        <p className="text-sm text-slate-400 mb-4">{upcomingServices[0].service_type} is due soon.</p>
-                        <Button variant="outline" size="sm" className="w-full" onClick={() => navigate('/upcoming')}>Review</Button>
+                        <p className="text-sm text-slate-400 mb-4">{upcomingServices[0].serviceName}</p>
+                        <p className="text-xs text-red-400 font-mono bg-red-500/10 px-2 py-1 rounded border border-red-500/20">{upcomingServices[0].reason}</p>
+                        <Button variant="outline" size="sm" className="w-full mt-4" onClick={() => navigate('/upcoming')}>Review</Button>
                     </Card>
                 ) : (
                     <Card className="flex flex-col justify-center items-center text-center bg-gradient-to-b from-dark-light to-dark border-emerald-500/20">
@@ -160,7 +190,7 @@ export default function Dashboard() {
                             <ShieldCheck className="w-6 h-6" />
                         </div>
                         <h3 className="text-lg font-bold text-white mb-1">All Good</h3>
-                        <p className="text-sm text-slate-400 mb-4">No urgent maintenance required.</p>
+                        <p className="text-sm text-slate-400 mb-4">You are on top of your maintenance.</p>
                         <Button variant="outline" size="sm" className="w-full" onClick={() => navigate('/vehicles')}>View Fleet</Button>
                     </Card>
                 )}
@@ -168,25 +198,29 @@ export default function Dashboard() {
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 <Card>
-                    <CardHeader title="Upcoming Services" subtitle="Based on your maintenance schedule" />
+                    <CardHeader title="Smart Schedule" subtitle="Calculated based on your mileage & date" />
                     <div className="space-y-4">
-                        {upcomingServices.length > 0 ? upcomingServices.slice(0, 3).map(service => (
-                            <div key={service.id} className="flex items-start gap-4 p-4 rounded-xl bg-white/5 hover:bg-white/10 transition-colors border border-white/5">
-                                <div className="w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center text-primary mt-1">
-                                    <Calendar className="w-5 h-5" />
+                        {upcomingServices.length > 0 ? upcomingServices.slice(0, 3).map((service, index) => (
+                            <div key={index} className="flex items-start gap-4 p-4 rounded-xl bg-white/5 hover:bg-white/10 transition-colors border border-white/5">
+                                <div className={`w-10 h-10 rounded-full flex items-center justify-center mt-1 ${service.status === 'DUE' ? 'bg-red-500/20 text-red-500' : 'bg-amber-500/20 text-amber-500'}`}>
+                                    {service.status === 'DUE' ? <AlertTriangle className="w-5 h-5" /> : <Calendar className="w-5 h-5" />}
                                 </div>
                                 <div className="flex-1">
-                                    <h4 className="font-bold text-white">{service.service_type}</h4>
-                                    <p className="text-sm text-slate-400">Due: {service.date}</p>
+                                    <div className="flex justify-between">
+                                        <h4 className="font-bold text-white">{service.serviceName}</h4>
+                                        <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded border ${service.status === 'DUE' ? 'text-red-400 border-red-500/30' : 'text-amber-400 border-amber-500/30'}`}>
+                                            {service.status}
+                                        </span>
+                                    </div>
+                                    <p className="text-sm text-slate-400 mt-1">{service.reason}</p>
                                 </div>
-                                <Button variant="ghost" size="sm" onClick={() => navigate('/upcoming')}>View</Button>
                             </div>
                         )) : (
                             <div className="text-center py-4 text-slate-500">
-                                <p>No upcoming services scheduled.</p>
+                                <p>No immediate maintenance required.</p>
                             </div>
                         )}
-                        <Button variant="ghost" className="w-full mt-2" onClick={() => navigate('/upcoming')}>View Full Schedule</Button>
+                        <Button variant="ghost" className="w-full mt-2" onClick={() => navigate('/upcoming')}>View Full Logic</Button>
                     </div>
                 </Card>
 

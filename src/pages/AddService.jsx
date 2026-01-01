@@ -1,23 +1,26 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { supabase } from '../lib/supabase';
 import { Layout } from '../components/layout/Layout';
 import { Card } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
-import { Loader2, ArrowLeft, Calendar } from 'lucide-react';
+import { Loader2, ArrowLeft, Calendar, Gauge } from 'lucide-react';
 
 export default function AddService() {
     const navigate = useNavigate();
+    const location = useLocation();
     const { user } = useAuth();
     const [loading, setLoading] = useState(false);
     const [fetchingVehicles, setFetchingVehicles] = useState(true);
     const [vehicles, setVehicles] = useState([]);
+    const [serviceTypes, setServiceTypes] = useState([]);
 
     const [formData, setFormData] = useState({
         vehicle_id: '',
         service_type: '',
         date: new Date().toISOString().split('T')[0],
+        mileage: '',
         cost: '',
         notes: '',
         status: 'completed'
@@ -29,15 +32,41 @@ export default function AddService() {
             try {
                 const { data, error } = await supabase
                     .from('vehicles')
-                    .select('id, make, model, year')
+                    .select('id, make, model, year, mileage')
                     .eq('user_id', user.id)
                     .order('created_at', { ascending: false });
 
                 if (error) throw error;
                 setVehicles(data || []);
-                if (data && data.length > 0) {
-                    setFormData(prev => ({ ...prev, vehicle_id: data[0].id }));
+
+
+                // Fetch Service Types
+                const { data: typesData, error: typesError } = await supabase
+                    .from('service_types')
+                    .select('*')
+                    .order('name');
+
+                if (typesError) throw typesError;
+                setServiceTypes(typesData || []);
+
+                // Pre-fill Logic
+                if (location.state) {
+                    const { vehicleId, serviceTypeName } = location.state;
+                    const selectedVehicle = data.find(v => v.id === vehicleId);
+                    setFormData(prev => ({
+                        ...prev,
+                        vehicle_id: vehicleId || (data && data.length > 0 ? data[0].id : ''),
+                        service_type: serviceTypeName || '',
+                        mileage: selectedVehicle ? selectedVehicle.mileage : ''
+                    }));
+                } else if (data && data.length > 0) {
+                    setFormData(prev => ({
+                        ...prev,
+                        vehicle_id: data[0].id,
+                        mileage: data[0].mileage
+                    }));
                 }
+
             } catch (err) {
                 console.error('Error fetching vehicles:', err);
                 setError('Failed to load your vehicles. Please try again.');
@@ -69,6 +98,7 @@ export default function AddService() {
                         vehicle_id: formData.vehicle_id,
                         service_type: formData.service_type,
                         date: formData.date,
+                        mileage: formData.mileage ? parseInt(formData.mileage) : null,
                         cost: formData.cost ? parseFloat(formData.cost) : null,
                         notes: formData.notes,
                         status: formData.status
@@ -77,8 +107,37 @@ export default function AddService() {
 
             if (insertError) throw insertError;
 
-            // Update vehicle mileage if provided in the service log? 
-            // For simplicity, let's keep it separate for now or maybe later add a feature to update mileage from here.
+            // 2. Update Vehicle Mileage if Service Mileage is greater
+            // This ensures the car's odometer stays up to date
+            const vehicle = vehicles.find(v => v.id === formData.vehicle_id);
+            const serviceMileage = parseInt(formData.mileage) || 0;
+
+            if (vehicle && serviceMileage > vehicle.mileage) {
+                const { error: vehicleUpdateError } = await supabase
+                    .from('vehicles')
+                    .update({ mileage: serviceMileage })
+                    .eq('id', formData.vehicle_id);
+
+                if (vehicleUpdateError) console.error("Failed to update vehicle mileage", vehicleUpdateError);
+            }
+
+
+            // 3. Update Maintenance Schedule (Module 2) - Closing the Loop
+            // Find the service type object to get the ID
+            const selectedType = serviceTypes.find(t => t.name === formData.service_type);
+
+            if (selectedType) {
+                const { error: updateError } = await supabase
+                    .from('maintenance_schedules')
+                    .update({
+                        last_performed_date: formData.date,
+                        last_performed_mileage: serviceMileage
+                    })
+                    .eq('vehicle_id', formData.vehicle_id)
+                    .eq('service_type_id', selectedType.id);
+
+                if (updateError) console.error("Failed to update schedule:", updateError);
+            }
 
             navigate('/history');
         } catch (err) {
@@ -128,7 +187,14 @@ export default function AddService() {
                                         required
                                         className="w-full bg-slate-900/50 border border-slate-700/50 rounded-lg px-4 py-2.5 text-white focus:outline-none focus:border-primary placeholder-slate-500"
                                         value={formData.vehicle_id}
-                                        onChange={e => setFormData({ ...formData, vehicle_id: e.target.value })}
+                                        onChange={e => {
+                                            const v = vehicles.find(vh => vh.id === e.target.value);
+                                            setFormData({
+                                                ...formData,
+                                                vehicle_id: e.target.value,
+                                                mileage: v ? v.mileage : ''
+                                            });
+                                        }}
                                     >
                                         {vehicles.map(v => (
                                             <option key={v.id} value={v.id}>
@@ -141,22 +207,19 @@ export default function AddService() {
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                     <div className="space-y-2">
                                         <label className="text-sm font-medium text-slate-300">Service Type</label>
-                                        <input
-                                            type="text"
+                                        <select
                                             required
-                                            list="service-types"
                                             className="w-full bg-slate-900/50 border border-slate-700/50 rounded-lg px-4 py-2.5 text-white focus:outline-none focus:border-primary placeholder-slate-500"
-                                            placeholder="e.g. Oil Change"
                                             value={formData.service_type}
                                             onChange={e => setFormData({ ...formData, service_type: e.target.value })}
-                                        />
-                                        <datalist id="service-types">
-                                            <option value="Oil Change" />
-                                            <option value="Tire Rotation" />
-                                            <option value="Brake Inspection" />
-                                            <option value="Battery Replacement" />
-                                            <option value="General Inspection" />
-                                        </datalist>
+                                        >
+                                            <option value="">Select Service...</option>
+                                            {serviceTypes.map(type => (
+                                                <option key={type.id} value={type.name}>
+                                                    {type.name}
+                                                </option>
+                                            ))}
+                                        </select>
                                     </div>
                                     <div className="space-y-2">
                                         <label className="text-sm font-medium text-slate-300">Date</label>
@@ -172,6 +235,21 @@ export default function AddService() {
                                         </div>
                                     </div>
                                     <div className="space-y-2">
+                                        <label className="text-sm font-medium text-slate-300">Mileage (at Service)</label>
+                                        <div className="relative">
+                                            <Gauge className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
+                                            <input
+                                                type="number"
+                                                required
+                                                min="0"
+                                                className="w-full bg-slate-900/50 border border-slate-700/50 rounded-lg py-2.5 pl-10 pr-4 text-white focus:outline-none focus:border-primary placeholder-slate-500"
+                                                placeholder="e.g. 50000"
+                                                value={formData.mileage}
+                                                onChange={e => setFormData({ ...formData, mileage: e.target.value })}
+                                            />
+                                        </div>
+                                    </div>
+                                    <div className="space-y-2">
                                         <label className="text-sm font-medium text-slate-300">Cost ($)</label>
                                         <input
                                             type="number"
@@ -183,17 +261,7 @@ export default function AddService() {
                                             onChange={e => setFormData({ ...formData, cost: e.target.value })}
                                         />
                                     </div>
-                                    <div className="space-y-2">
-                                        <label className="text-sm font-medium text-slate-300">Status</label>
-                                        <select
-                                            className="w-full bg-slate-900/50 border border-slate-700/50 rounded-lg px-4 py-2.5 text-white focus:outline-none focus:border-primary placeholder-slate-500"
-                                            value={formData.status}
-                                            onChange={e => setFormData({ ...formData, status: e.target.value })}
-                                        >
-                                            <option value="completed">Completed</option>
-                                            <option value="upcoming">Upcoming</option>
-                                        </select>
-                                    </div>
+                                    <div />
                                 </div>
 
                                 <div className="space-y-2">

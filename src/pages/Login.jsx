@@ -35,6 +35,11 @@ const Login = () => {
                     return;
                 }
 
+                if (profile?.role === 'dealer') {
+                    navigate('/dealer');
+                    return;
+                }
+
                 // Check if user has any vehicles
                 const { count, error: countError } = await supabase
                     .from('vehicles')

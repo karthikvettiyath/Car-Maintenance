@@ -32,9 +32,8 @@ const AdminUsers = () => {
         }
     };
 
-    const toggleRole = async (userId, currentRole) => {
+    const setRole = async (userId, newRole) => {
         if (!supabase) return;
-        const newRole = currentRole === 'admin' ? 'user' : 'admin';
         setUpdating(userId);
         try {
             const { error } = await supabase
@@ -51,7 +50,6 @@ const AdminUsers = () => {
             setUpdating(null);
         }
     };
-
     const filteredUsers = users.filter(u => {
         const term = search.toLowerCase();
         return (
@@ -128,11 +126,10 @@ const AdminUsers = () => {
                                                 </div>
                                             </td>
                                             <td className="px-6 py-4">
-                                                <span className={`text-xs px-2.5 py-1 rounded-full font-medium ${
-                                                    profile.role === 'admin'
-                                                        ? 'bg-red-500/10 text-red-400 border border-red-500/20'
-                                                        : 'bg-blue-500/10 text-blue-400 border border-blue-500/20'
-                                                }`}>
+                                                <span className={`text-xs px-2.5 py-1 rounded-full font-medium ${profile.role === 'admin'
+                                                    ? 'bg-red-500/10 text-red-400 border border-red-500/20'
+                                                    : 'bg-blue-500/10 text-blue-400 border border-blue-500/20'
+                                                    }`}>
                                                     {profile.role || 'user'}
                                                 </span>
                                             </td>
@@ -140,29 +137,19 @@ const AdminUsers = () => {
                                                 {new Date(profile.created_at).toLocaleDateString()}
                                             </td>
                                             <td className="px-6 py-4 text-right">
-                                                <Button
-                                                    onClick={() => toggleRole(profile.id, profile.role)}
-                                                    disabled={updating === profile.id}
-                                                    className={`text-xs px-3 py-1.5 ${
-                                                        profile.role === 'admin'
-                                                            ? 'bg-slate-700 hover:bg-slate-600 text-slate-300'
-                                                            : 'bg-red-600/20 hover:bg-red-600/30 text-red-400'
-                                                    }`}
-                                                >
-                                                    {updating === profile.id ? (
-                                                        <Loader2 className="w-3 h-3 animate-spin" />
-                                                    ) : profile.role === 'admin' ? (
-                                                        <span className="flex items-center gap-1.5">
-                                                            <ShieldOff className="w-3 h-3" />
-                                                            Remove Admin
-                                                        </span>
-                                                    ) : (
-                                                        <span className="flex items-center gap-1.5">
-                                                            <Shield className="w-3 h-3" />
-                                                            Make Admin
-                                                        </span>
-                                                    )}
-                                                </Button>
+                                                <div className="flex justify-end gap-2">
+                                                    <select
+                                                        className="bg-slate-700 text-white text-xs rounded border border-slate-600 px-2 py-1 focus:outline-none focus:border-red-500"
+                                                        value={profile.role || 'user'}
+                                                        onChange={(e) => setRole(profile.id, e.target.value)}
+                                                        disabled={updating === profile.id}
+                                                    >
+                                                        <option value="user">User</option>
+                                                        <option value="dealer">Dealer</option>
+                                                        <option value="admin">Admin</option>
+                                                    </select>
+                                                    {updating === profile.id && <Loader2 className="w-4 h-4 animate-spin text-slate-400" />}
+                                                </div>
                                             </td>
                                         </tr>
                                     ))

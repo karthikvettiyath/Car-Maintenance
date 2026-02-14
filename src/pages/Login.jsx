@@ -23,6 +23,18 @@ const Login = () => {
             if (error) throw error;
 
             try {
+                // Check user role from profiles table
+                const { data: profile } = await supabase
+                    .from('profiles')
+                    .select('role')
+                    .eq('id', data.user.id)
+                    .single();
+
+                if (profile?.role === 'admin') {
+                    navigate('/admin');
+                    return;
+                }
+
                 // Check if user has any vehicles
                 const { count, error: countError } = await supabase
                     .from('vehicles')
@@ -37,7 +49,7 @@ const Login = () => {
                     navigate('/');
                 }
             } catch (vehicleErr) {
-                console.error('Vehicle check failed after sign-in:', vehicleErr);
+                console.error('Post sign-in check failed:', vehicleErr);
                 navigate('/');
             }
         } catch (error) {
@@ -91,7 +103,15 @@ const Login = () => {
                             </div>
 
                             <div className="space-y-2">
-                                <label className="text-sm font-medium text-slate-300">Password</label>
+                                <div className="flex items-center justify-between">
+                                    <label className="text-sm font-medium text-slate-300">Password</label>
+                                    <Link
+                                        to="/forgot-password"
+                                        className="text-xs text-blue-400 hover:text-blue-300 hover:underline"
+                                    >
+                                        Forgot Password?
+                                    </Link>
+                                </div>
                                 <div className="relative">
                                     <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
                                     <input

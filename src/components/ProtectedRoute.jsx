@@ -3,7 +3,7 @@ import { useAuth } from '../context/AuthContext';
 import { Loader2 } from 'lucide-react';
 
 const ProtectedRoute = ({ children }) => {
-    const { user, loading } = useAuth();
+    const { user, role, loading } = useAuth();
     const location = useLocation();
 
     if (loading) {
@@ -16,6 +16,16 @@ const ProtectedRoute = ({ children }) => {
 
     if (!user) {
         return <Navigate to="/login" state={{ from: location }} replace />;
+    }
+
+    // Redirect dealers and admins to their own dashboards
+    // when they try to access user-only routes
+    if (role === 'dealer') {
+        return <Navigate to="/dealer" replace />;
+    }
+
+    if (role === 'admin') {
+        return <Navigate to="/admin" replace />;
     }
 
     return children;

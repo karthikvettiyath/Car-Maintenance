@@ -1,4 +1,4 @@
-import { LayoutDashboard, PenTool, Database, Settings, Truck, Search, LogOut } from 'lucide-react';
+import { LayoutDashboard, PenTool, Database, Settings, Truck, Search, LogOut, Car, Users } from 'lucide-react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import { clsx } from 'clsx';
 import { useAuth } from '../../context/AuthContext';
@@ -14,6 +14,8 @@ export function DealerSidebar({ className }) {
 
     const navItems = [
         { icon: LayoutDashboard, label: 'Dashboard', to: '/dealer' },
+        { icon: Car, label: 'All Vehicles', to: '/dealer/vehicles' },
+        { icon: Users, label: 'Customers', to: '/dealer/customers' },
         { icon: Search, label: 'Vehicle Lookup', to: '/dealer/lookup' },
         { icon: PenTool, label: 'Log Service', to: '/dealer/log-service' },
         { icon: Database, label: 'Service History', to: '/dealer/history' },
@@ -29,21 +31,21 @@ export function DealerSidebar({ className }) {
                 <span className="ml-3 font-bold text-lg hidden lg:block tracking-wide">Dealer Portal</span>
             </div>
 
-            <nav className="flex-1 py-6 flex flex-col gap-2 px-3">
+            <nav className="flex-1 py-6 flex flex-col gap-1 px-3 overflow-y-auto">
                 {navItems.map((item) => (
                     <NavLink
                         key={item.to}
                         to={item.to}
                         end={item.to === '/dealer'}
                         className={({ isActive }) => clsx(
-                            "flex items-center gap-3 px-3 py-3 rounded-xl transition-all duration-200 group",
+                            "flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200 group",
                             isActive
                                 ? "bg-amber-500/10 text-amber-500 font-medium border border-amber-500/20"
-                                : "text-slate-400 hover:bg-white/5 hover:text-white"
+                                : "text-slate-400 hover:bg-white/5 hover:text-white border border-transparent"
                         )}
                     >
-                        <item.icon className="w-5 h-5" />
-                        <span className="hidden lg:block">{item.label}</span>
+                        <item.icon className="w-5 h-5 flex-shrink-0" />
+                        <span className="hidden lg:block text-sm">{item.label}</span>
                     </NavLink>
                 ))}
             </nav>

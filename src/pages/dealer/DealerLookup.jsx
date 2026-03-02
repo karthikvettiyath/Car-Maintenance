@@ -4,7 +4,7 @@ import { Card } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
 import { supabase } from '../../lib/supabase';
 import { useNavigate } from 'react-router-dom';
-import { Search, Loader2, AlertCircle, CheckCircle } from 'lucide-react';
+import { Search, Loader2, AlertCircle, CheckCircle, PenTool } from 'lucide-react';
 
 const DealerLookup = () => {
     const navigate = useNavigate();

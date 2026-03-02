@@ -23,6 +23,8 @@ import AdminUsers from './pages/admin/AdminUsers';
 import AdminSettings from './pages/admin/AdminSettings';
 
 import DealerDashboard from './pages/dealer/DealerDashboard';
+import DealerVehicles from './pages/dealer/DealerVehicles';
+import DealerCustomers from './pages/dealer/DealerCustomers';
 import DealerLookup from './pages/dealer/DealerLookup';
 import DealerLogService from './pages/dealer/DealerLogService';
 import DealerHistory from './pages/dealer/DealerHistory';
@@ -56,6 +58,8 @@ function App() {
 
           {/* Dealer Routes */}
           <Route path="/dealer" element={<DealerRoute><DealerDashboard /></DealerRoute>} />
+          <Route path="/dealer/vehicles" element={<DealerRoute><DealerVehicles /></DealerRoute>} />
+          <Route path="/dealer/customers" element={<DealerRoute><DealerCustomers /></DealerRoute>} />
           <Route path="/dealer/lookup" element={<DealerRoute><DealerLookup /></DealerRoute>} />
           <Route path="/dealer/log-service" element={<DealerRoute><DealerLogService /></DealerRoute>} />
           <Route path="/dealer/history" element={<DealerRoute><DealerHistory /></DealerRoute>} />

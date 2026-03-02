@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useAuth } from '../../context/AuthContext';
 import { AdminLayout } from '../../components/layout/AdminLayout';
 import { Card } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
@@ -6,6 +7,7 @@ import { supabase } from '../../lib/supabase';
 import { Users, Search, Shield, ShieldOff, Loader2 } from 'lucide-react';
 
 const AdminUsers = () => {
+    const { user: currentUser } = useAuth();
     const [users, setUsers] = useState([]);
     const [loading, setLoading] = useState(true);
     const [search, setSearch] = useState('');
@@ -142,7 +144,8 @@ const AdminUsers = () => {
                                                         className="bg-slate-700 text-white text-xs rounded border border-slate-600 px-2 py-1 focus:outline-none focus:border-red-500"
                                                         value={profile.role || 'user'}
                                                         onChange={(e) => setRole(profile.id, e.target.value)}
-                                                        disabled={updating === profile.id}
+                                                        disabled={updating === profile.id || profile.id === currentUser?.id}
+                                                        title={profile.id === currentUser?.id ? "You cannot change your own role" : "Change role"}
                                                     >
                                                         <option value="user">User</option>
                                                         <option value="dealer">Dealer</option>

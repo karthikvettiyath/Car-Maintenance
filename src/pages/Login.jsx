@@ -22,25 +22,28 @@ const Login = () => {
             const { data, error } = await signIn({ email, password });
             if (error) throw error;
 
+            // The signIn in AuthContext already fetches the role.
+            // We can read it from the returned user's profile.
             try {
-                // Check user role from profiles table
                 const { data: profile } = await supabase
                     .from('profiles')
                     .select('role')
                     .eq('id', data.user.id)
                     .single();
 
-                if (profile?.role === 'admin') {
+                const userRole = profile?.role || 'user';
+
+                if (userRole === 'admin') {
                     navigate('/admin');
                     return;
                 }
 
-                if (profile?.role === 'dealer') {
+                if (userRole === 'dealer') {
                     navigate('/dealer');
                     return;
                 }
 
-                // Check if user has any vehicles
+                // Regular user — check if they have vehicles for onboarding
                 const { count, error: countError } = await supabase
                     .from('vehicles')
                     .select('*', { count: 'exact', head: true })
@@ -53,8 +56,8 @@ const Login = () => {
                 } else {
                     navigate('/');
                 }
-            } catch (vehicleErr) {
-                console.error('Post sign-in check failed:', vehicleErr);
+            } catch (postErr) {
+                console.error('Post sign-in check failed:', postErr);
                 navigate('/');
             }
         } catch (error) {

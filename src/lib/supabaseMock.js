@@ -1,9 +1,7 @@
 
-const mockUser = {
-    id: 'dealer-123',
-    email: 'dealer@example.com',
-    user_metadata: { full_name: 'Premium Motors' }
-};
+// Mutable current user — changes when you sign in with different credentials
+// Starts as null (logged out) so you can log in as any user
+let currentUser = null;
 
 // ─── Central Data Store (mutable, shared across all calls) ───────────────────
 const store = {
@@ -313,18 +311,105 @@ const createMockChain = (tableName) => {
     return chain;
 };
 
+// ─── Auth state change listeners ────────────────────────────────────────────
+let authListeners = [];
+
+const notifyAuthListeners = (event, user) => {
+    const session = user ? { user } : null;
+    authListeners.forEach(cb => {
+        try { cb(event, session); } catch (e) { console.error('[MockAuth] listener error', e); }
+    });
+};
+
 // ─── Export ──────────────────────────────────────────────────────────────────
 export const supabaseMock = {
     auth: {
-        getSession: () => Promise.resolve({ data: { session: { user: mockUser } }, error: null }),
-        getUser: () => Promise.resolve({ data: { user: mockUser }, error: null }),
-        onAuthStateChange: (cb) => {
-            setTimeout(() => cb('SIGNED_IN', { user: mockUser }), 10);
-            return { data: { subscription: { unsubscribe: () => { } } } };
+        getSession: () => {
+            if (!currentUser) {
+                return Promise.resolve({ data: { session: null }, error: null });
+            }
+            return Promise.resolve({ data: { session: { user: currentUser } }, error: null });
         },
-        signInWithPassword: () => Promise.resolve({ data: { user: mockUser }, error: null }),
-        signUp: () => Promise.resolve({ data: { user: mockUser }, error: null }),
-        signOut: () => Promise.resolve({ error: null }),
+        getUser: () => {
+            if (!currentUser) {
+                return Promise.resolve({ data: { user: null }, error: null });
+            }
+            return Promise.resolve({ data: { user: currentUser }, error: null });
+        },
+        onAuthStateChange: (cb) => {
+            authListeners.push(cb);
+            // Fire immediately with current session
+            if (currentUser) {
+                setTimeout(() => cb('SIGNED_IN', { user: currentUser }), 10);
+            }
+            return {
+                data: {
+                    subscription: {
+                        unsubscribe: () => {
+                            authListeners = authListeners.filter(l => l !== cb);
+                        }
+                    }
+                }
+            };
+        },
+        signInWithPassword: ({ email, password }) => {
+            // Look up the user by email in profiles store
+            const profile = store.profiles.find(p => p.email === email);
+            if (!profile) {
+                return Promise.resolve({
+                    data: { user: null },
+                    error: { message: 'Invalid login credentials' }
+                });
+            }
+            // Switch current user to the matched profile
+            currentUser = {
+                id: profile.id,
+                email: profile.email,
+                user_metadata: { full_name: profile.full_name }
+            };
+            console.log(`[MockAuth] Signed in as ${profile.role}: ${profile.email} (${profile.id})`);
+            // Notify listeners
+            setTimeout(() => notifyAuthListeners('SIGNED_IN', currentUser), 10);
+            return Promise.resolve({ data: { user: currentUser }, error: null });
+        },
+        signUp: ({ email, password, options }) => {
+            // Check if email already exists
+            const existing = store.profiles.find(p => p.email === email);
+            if (existing) {
+                return Promise.resolve({
+                    data: { user: null },
+                    error: { message: 'User already registered' }
+                });
+            }
+            // Create new user with 'user' role
+            const newId = `user-${Date.now()}`;
+            const fullName = options?.data?.full_name || email.split('@')[0];
+            const newProfile = {
+                id: newId,
+                email,
+                role: 'user',
+                full_name: fullName,
+                created_at: new Date().toISOString(),
+                updated_at: new Date().toISOString(),
+            };
+            store.profiles.push(newProfile);
+            currentUser = {
+                id: newId,
+                email,
+                user_metadata: { full_name: fullName }
+            };
+            console.log(`[MockAuth] Signed up new user: ${email} (${newId})`);
+            setTimeout(() => notifyAuthListeners('SIGNED_IN', currentUser), 10);
+            return Promise.resolve({ data: { user: currentUser }, error: null });
+        },
+        signOut: () => {
+            console.log(`[MockAuth] Signed out: ${currentUser?.email}`);
+            currentUser = null;
+            setTimeout(() => notifyAuthListeners('SIGNED_OUT', null), 10);
+            return Promise.resolve({ error: null });
+        },
+        resetPasswordForEmail: () => Promise.resolve({ error: null }),
+        updateUser: () => Promise.resolve({ data: { user: currentUser }, error: null }),
     },
     from: (table) => createMockChain(table),
 };

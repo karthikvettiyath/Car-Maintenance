@@ -78,15 +78,50 @@ export const AuthProvider = ({ children }) => {
     }, []);
 
     const value = {
-        signUp: (data) => supabase
-            ? supabase.auth.signUp(data)
-            : Promise.reject(new Error('Supabase is not configured.')),
-        signIn: (data) => supabase
-            ? supabase.auth.signInWithPassword(data)
-            : Promise.reject(new Error('Supabase is not configured.')),
-        signOut: () => supabase
-            ? supabase.auth.signOut()
-            : Promise.reject(new Error('Supabase is not configured.')),
+        signUp: async (data) => {
+            if (!supabase) throw new Error('Supabase is not configured.');
+            const result = await supabase.auth.signUp(data);
+            if (!result.error && result.data?.user) {
+                const chosenRole = data.options?.data?.role || 'user';
+                // The DB trigger creates a profile with role='user' by default.
+                // Update the profile to the chosen role after signup.
+                const { error: updateError } = await supabase
+                    .from('profiles')
+                    .update({ role: chosenRole })
+                    .eq('id', result.data.user.id);
+
+                if (updateError) {
+                    console.warn('Could not update profile role after signup:', updateError);
+                }
+
+                setUser(result.data.user);
+                setSession(result.data.session || { user: result.data.user });
+                setRole(chosenRole);
+            }
+            return result;
+        },
+        signIn: async (data) => {
+            if (!supabase) throw new Error('Supabase is not configured.');
+            const result = await supabase.auth.signInWithPassword(data);
+            if (!result.error && result.data?.user) {
+                // Directly update state so route guards see the user immediately
+                setUser(result.data.user);
+                setSession({ user: result.data.user });
+                await fetchUserRole(result.data.user.id);
+            }
+            return result;
+        },
+        signOut: async () => {
+            if (!supabase) throw new Error('Supabase is not configured.');
+            const result = await supabase.auth.signOut();
+            if (!result.error) {
+                // Immediately clear state so route guards redirect to login
+                setUser(null);
+                setSession(null);
+                setRole(null);
+            }
+            return result;
+        },
         resetPassword: (email) => supabase
             ? supabase.auth.resetPasswordForEmail(email, {
                 redirectTo: `${window.location.origin}/reset-password`,
@@ -99,6 +134,7 @@ export const AuthProvider = ({ children }) => {
         session,
         role,
         isAdmin: role === 'admin',
+        isDealer: role === 'dealer',
         loading
     };
 
